@@ -16,7 +16,7 @@ from .serializers import (
 )
 
 class ReportsOverviewView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def get(self, request):
         """Get overview statistics for reports"""
@@ -62,7 +62,7 @@ class ReportsOverviewView(APIView):
         return Response(serializer.data)
 
 class EmployeeReportsView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def get(self, request):
         """Get employee-specific statistics"""
@@ -121,7 +121,7 @@ class EmployeeReportsView(APIView):
         return Response(serializer.data)
 
 class DailyReportsView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def get(self, request):
         """Get daily breakdown of hours and activities"""
@@ -168,7 +168,7 @@ class DailyReportsView(APIView):
         return Response(serializer.data)
 
 class CSVExportView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def post(self, request):
         """Export time tracking data to CSV"""

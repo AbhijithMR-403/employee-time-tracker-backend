@@ -17,7 +17,7 @@ from .utils import TimeCalculationService
 class TimeEntryViewSet(viewsets.ModelViewSet):
     queryset = TimeEntry.objects.all()
     serializer_class = TimeEntrySerializer
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = TimeEntry.objects.select_related('employee').all()
@@ -61,7 +61,7 @@ class TimeEntryViewSet(viewsets.ModelViewSet):
 class WorkSessionViewSet(viewsets.ModelViewSet):
     queryset = WorkSession.objects.all()
     serializer_class = WorkSessionSerializer
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = WorkSession.objects.select_related('employee').prefetch_related('punch_cycles').all()
@@ -109,7 +109,7 @@ class WorkSessionViewSet(viewsets.ModelViewSet):
             )
 
 class TimeTrackingAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    # permission_classes = [IsAuthenticated]
 
     def post(self, request):
         """Handle punch actions (punch in/out, break start/end)"""
