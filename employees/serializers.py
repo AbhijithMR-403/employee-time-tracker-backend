@@ -80,6 +80,6 @@ class BusinessHoursSerializer(serializers.ModelSerializer):
         end_time = data.get('end_time')
         
         if start_time and end_time and start_time >= end_time:
-            raise serializers.ValidationError('End time must be after start time.')
+            raise serializers.ValidationError({'error': 'End time must be after start time.'})
         
         return data

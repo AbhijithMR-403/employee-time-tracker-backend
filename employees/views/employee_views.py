@@ -83,14 +83,14 @@ class BusinessHoursViewSet(viewsets.ModelViewSet):
         else:
             # Return default business hours if none configured
             default_data = {
-                'start_time': '09:00:00',
+                'start_time': '11:30:00',
                 'end_time': '17:00:00',
                 'break_duration': 60,
                 'late_threshold': 15
             }
             return Response(default_data)
 
-    @action(detail=True, methods=['post'])
+    @action(detail=True, methods=['POST'])
     def activate(self, request, pk=None):
         """Activate specific business hours configuration"""
         business_hours = self.get_object()

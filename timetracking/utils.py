@@ -289,6 +289,5 @@ class TimeCalculationService:
             return False
         
         entry_time = timestamp.time()
-        end_time = business_hours.end_time
-        
-        return entry_time < end_time
+        scheduled_end_dt = datetime.combine(timestamp.date(), business_hours.end_time).time()
+        return entry_time < scheduled_end_dt
