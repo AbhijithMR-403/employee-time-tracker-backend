@@ -3,7 +3,7 @@ from django.contrib.auth import authenticate
 from .models import CustomUser, Employee, BusinessHours
 
 class CustomUserSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(write_only=True)
+    password = serializers.CharField(write_only=True, required=False, allow_blank=True)
     
     class Meta:
         model = CustomUser

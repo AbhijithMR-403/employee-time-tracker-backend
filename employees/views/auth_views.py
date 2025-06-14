@@ -25,7 +25,16 @@ class LogoutView(APIView):
 class AdminUserViewSet(viewsets.ModelViewSet):
     queryset = CustomUser.objects.all()
     serializer_class = CustomUserSerializer
-    # permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        """
+        Instantiates and returns the list of permissions that this view requires.
+        Only requires authentication for POST methods.
+        """
+        if self.request.method == 'POST':
+            return [IsAuthenticated()]
+        return []
+
 
     def get_queryset(self):
         queryset = CustomUser.objects.all()

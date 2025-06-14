@@ -13,6 +13,7 @@ from .serializers import (
 )
 from employees.models import Employee, BusinessHours
 from .utils import TimeCalculationService
+from django.db.models import Prefetch
 
 class TimeEntryViewSet(viewsets.ModelViewSet):
     queryset = TimeEntry.objects.all()
@@ -64,8 +65,13 @@ class WorkSessionViewSet(viewsets.ModelViewSet):
     # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        queryset = WorkSession.objects.select_related('employee').prefetch_related('punch_cycles').all()
-        
+        queryset = WorkSession.objects.select_related('employee').prefetch_related(
+            Prefetch(
+                'punch_cycles',
+                queryset=PunchCycle.objects.order_by('-created_at')  # or Sort latest date to old 
+            )
+        )
+
         # Filter by employee
         employee_id = self.request.query_params.get('employee_id', None)
         if employee_id:

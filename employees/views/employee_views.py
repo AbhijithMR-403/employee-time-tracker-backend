@@ -1,7 +1,8 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-# from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, BasePermission
+from rest_framework.authentication import TokenAuthentication
 from django.db import models
 from ..models import Employee, BusinessHours
 from ..serializers import EmployeeSerializer, BusinessHoursSerializer
@@ -9,7 +10,15 @@ from ..serializers import EmployeeSerializer, BusinessHoursSerializer
 class EmployeeViewSet(viewsets.ModelViewSet):
     queryset = Employee.objects.all()
     serializer_class = EmployeeSerializer
-    # permission_classes = [IsAuthenticated]
+
+    def get_permissions(self):
+        """
+        Instantiates and returns the list of permissions that this view requires.
+        Only requires authentication for POST methods.
+        """
+        if self.request.method == 'POST':
+            return [IsAuthenticated()]
+        return []
 
     def get_queryset(self):
         queryset = Employee.objects.all()
@@ -71,7 +80,15 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 class BusinessHoursViewSet(viewsets.ModelViewSet):
     queryset = BusinessHours.objects.all()
     serializer_class = BusinessHoursSerializer
-    # permission_classes = [IsAuthenticated]
+    
+    def get_permissions(self):
+        """
+        Instantiates and returns the list of permissions that this view requires.
+        Only requires authentication for POST methods.
+        """
+        if self.request.method == 'POST':
+            return [IsAuthenticated()]
+        return []
 
     @action(detail=False, methods=['get'])
     def current(self, request):
