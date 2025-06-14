@@ -31,6 +31,3 @@ venv.bak/
 .DS_Store
 Thumbs.db
 
-# Migrations
-*/migrations/
-!*/migrations/__init__.py

@@ -1,3 +1,4 @@
+from datetime import timedelta
 import os
 from decouple import config
 from pathlib import Path
@@ -102,7 +103,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # Internationalization
 LANGUAGE_CODE = 'en-us'
-TIME_ZONE = config('TIME_ZONE', default='UTC')
+TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
@@ -215,4 +216,12 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
     )
+}
+
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(days=3650),  # 10 years
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'UPDATE_LAST_LOGIN': False,
 }
