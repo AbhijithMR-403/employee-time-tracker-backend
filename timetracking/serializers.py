@@ -48,3 +48,13 @@ class WorkStatusSerializer(serializers.Serializer):
     can_end_break = serializers.BooleanField()
     current_status = serializers.CharField()
     last_action = TimeEntrySerializer(required=False, allow_null=True)
+
+class WorkSessionEditSerializer(serializers.Serializer):
+    punch_in = serializers.DateTimeField(required=True)
+    punch_out = serializers.DateTimeField(required=True)
+    note = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate(self, data):
+        if data.get('punch_in') is None or data.get('punch_out') is None:
+            raise serializers.ValidationError('Both punch_in and punch_out must be provided.')
+        return data

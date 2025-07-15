@@ -9,11 +9,12 @@ from datetime import datetime, date, time, timedelta
 from .models import TimeEntry, WorkSession, PunchCycle
 from .serializers import (
     TimeEntrySerializer, WorkSessionSerializer, TimeEntryCreateSerializer, 
-    WorkStatusSerializer, PunchCycleSerializer
+    WorkStatusSerializer, PunchCycleSerializer, WorkSessionEditSerializer
 )
 from employees.models import Employee, BusinessHours
 from .utils import TimeCalculationService
 from django.db.models import Prefetch
+from rest_framework.generics import get_object_or_404
 
 class TimeEntryViewSet(viewsets.ModelViewSet):
     queryset = TimeEntry.objects.all()
@@ -113,6 +114,68 @@ class WorkSessionViewSet(viewsets.ModelViewSet):
                 {'error': str(e)}, 
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class WorkSessionEditAPIView(APIView):
+    """Separate API to edit punch_in, punch_out, and note for a WorkSession."""
+    def put(self, request, pk):
+        work_session = get_object_or_404(WorkSession, pk=pk)
+        serializer = WorkSessionEditSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+        punch_in = data['punch_in']
+        punch_out = data['punch_out']
+        note = data.get('note', '')
+
+        # Validation: punch_in must not be after punch_out
+        if punch_in and punch_out and punch_in > punch_out:
+            return Response({'error': 'Punch in time cannot be after Punch out time.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Validation: punch in/out duration must not exceed 24 hours
+        if punch_in and punch_out:
+            duration = punch_out - punch_in
+            if duration.total_seconds() > 24 * 3600:
+                return Response({'error': 'Punch in and Punch out time cannot exceed 24 hours.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Update fields
+        work_session.punch_in = punch_in
+        work_session.punch_out = punch_out
+        work_session.note = note
+
+        # Calculate is_late_in and is_early_out using business logic
+        from employees.models import BusinessHours
+        business_hours = BusinessHours.get_current()
+        # is_late_in
+        if business_hours:
+            late_threshold = (datetime.combine(punch_in.date(), business_hours.start_time) + timedelta(minutes=business_hours.late_threshold)).time()
+            work_session.is_late_in = punch_in.time() > late_threshold
+            # is_early_out
+            scheduled_end = business_hours.end_time
+            work_session.is_early_out = punch_out.time() < scheduled_end
+        else:
+            work_session.is_late_in = False
+            work_session.is_early_out = False
+
+        # Update status
+        if punch_out:
+            work_session.status = 'complete'
+        else:
+            work_session.status = 'in_progress'
+
+        # Directly calculate total_hours and working_hours
+        from decimal import Decimal
+        if punch_in and punch_out:
+            duration = punch_out - punch_in
+            hours = Decimal(duration.total_seconds()) / Decimal(3600)
+            work_session.total_hours = round(hours, 2)
+            work_session.working_hours = round(hours, 2)
+        else:
+            work_session.total_hours = Decimal('0.00')
+            work_session.working_hours = Decimal('0.00')
+
+        work_session.save()
+        return Response(WorkSessionSerializer(work_session).data)
 
 class TimeTrackingAPIView(APIView):
     # permission_classes = [IsAuthenticated]

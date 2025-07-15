@@ -55,6 +55,7 @@ class WorkSession(models.Model):
     is_late_in = models.BooleanField(default=False)
     is_early_out = models.BooleanField(default=False)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='complete')
+    note = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
