@@ -1,8 +1,18 @@
 from django.utils import timezone
+import pytz
 from datetime import datetime, date, time, timedelta
 from decimal import Decimal
 from .models import TimeEntry, WorkSession, PunchCycle
 from employees.models import Employee, BusinessHours
+
+CENTRAL_TZ = pytz.timezone('America/Chicago')
+
+def to_local_chicago(dt):
+    """Convert UTC datetime to Chicago local time (TEST: returns hardcoded time)"""
+    if dt.tzinfo is None:
+        dt = timezone.make_aware(dt, timezone.utc)
+    return dt.astimezone(CENTRAL_TZ)
+
 
 class TimeCalculationService:
     """Service class for time tracking calculations"""
@@ -11,14 +21,14 @@ class TimeCalculationService:
         """Create a new time entry and update work session"""
         if timestamp is None:
             timestamp = timezone.now()
-        
+        # Always use local Chicago time for calculations
+        local_timestamp = to_local_chicago(timestamp)
         employee = Employee.objects.get(id=employee_id, is_active=True)
         business_hours = BusinessHours.get_current()
-        
+
         # Calculate late/early flags
-        is_late = self._is_late_entry(timestamp, business_hours, entry_type)
-        is_early = self._is_early_entry(timestamp, business_hours, entry_type)
-        
+        is_late = self._is_late_entry(local_timestamp, business_hours, entry_type)
+        is_early = self._is_early_entry(local_timestamp, business_hours, entry_type)
         # Create time entry
         time_entry = TimeEntry.objects.create(
             employee=employee,
@@ -28,21 +38,26 @@ class TimeCalculationService:
             is_early=is_early,
             notes=notes
         )
-        
+
         # Update or create work session
-        self._update_work_session(employee, timestamp.date())
-        
+        self._update_work_session(employee, local_timestamp.date())
+
         return time_entry
 
     def get_current_work_status(self, employee_id):
         """Get current work status for an employee"""
         employee = Employee.objects.get(id=employee_id, is_active=True)
-        today = timezone.now().date()
-        
+        today = to_local_chicago(timezone.now()).date()
+        start_local = CENTRAL_TZ.localize(datetime.combine(today, time.min))
+        end_local = CENTRAL_TZ.localize(datetime.combine(today, time.max))
+
+        start_utc = start_local.astimezone(pytz.UTC)
+        end_utc = end_local.astimezone(pytz.UTC)
+
         # Get today's entries
         today_entries = TimeEntry.objects.filter(
             employee=employee,
-            timestamp__date=today
+            timestamp__range=(start_utc, end_utc)
         ).order_by('timestamp')
         
         if not today_entries.exists():
@@ -103,28 +118,29 @@ class TimeCalculationService:
         
         sessions = []
         current_date = start_date
-        
         while current_date <= end_date:
-            # Get all employees with time entries on this date
             employees_with_entries = Employee.objects.filter(
                 time_entries__timestamp__date=current_date
             ).distinct()
-            
             for employee in employees_with_entries:
                 session = self._update_work_session(employee, current_date)
                 if session:
                     sessions.append(session)
-            
             current_date += timedelta(days=1)
-        
         return sessions
 
     def _update_work_session(self, employee, work_date):
         """Update or create work session for an employee and date"""
         # Get all time entries for this employee and date
+        start_local = CENTRAL_TZ.localize(datetime.combine(work_date, time.min))
+        end_local = CENTRAL_TZ.localize(datetime.combine(work_date, time.max))
+
+        start_utc = start_local.astimezone(pytz.UTC)
+        end_utc = end_local.astimezone(pytz.UTC)
+
         entries = TimeEntry.objects.filter(
             employee=employee,
-            timestamp__date=work_date
+            timestamp__range=(start_utc, end_utc)
         ).order_by('timestamp')
         
         if not entries.exists():
@@ -146,18 +162,17 @@ class TimeCalculationService:
         break_ends = entries.filter(type='break_end').order_by('timestamp')
         
         if punch_ins.exists():
-            work_session.punch_in = punch_ins.first().timestamp
+            work_session.punch_in = to_local_chicago(punch_ins.first().timestamp)
             work_session.is_late_in = punch_ins.first().is_late
-        
         if punch_outs.exists():
-            work_session.punch_out = punch_outs.last().timestamp
+            work_session.punch_out = to_local_chicago(punch_outs.last().timestamp)
             work_session.is_early_out = punch_outs.last().is_early
         
         if break_starts.exists():
-            work_session.break_start = break_starts.first().timestamp
-        
+            work_session.break_start = to_local_chicago(break_starts.first().timestamp)
+
         if break_ends.exists():
-            work_session.break_end = break_ends.last().timestamp
+            work_session.break_end = to_local_chicago(break_ends.last().timestamp)
         
         # Calculate hours and status
         self._calculate_session_hours(work_session, entries)
@@ -181,42 +196,43 @@ class TimeCalculationService:
         for i, punch_in in enumerate(punch_ins):
             if i < len(punch_outs):
                 punch_out = punch_outs[i]
-                cycle_duration = punch_out.timestamp - punch_in.timestamp
+                # Convert timestamps to local time
+                punch_in_local = to_local_chicago(punch_in.timestamp)
+                punch_out_local = to_local_chicago(punch_out.timestamp)
+                cycle_duration = punch_out_local - punch_in_local
                 cycle_hours = Decimal(str(cycle_duration.total_seconds() / 3600))
-                
+
                 # Calculate break time within this cycle
                 cycle_break_minutes = Decimal('0')
                 for j, break_start in enumerate(break_starts):
-                    if (break_start.timestamp >= punch_in.timestamp and 
-                        break_start.timestamp <= punch_out.timestamp):
-                        
+                    break_start_local = to_local_chicago(break_start.timestamp)
+                    if (break_start_local >= punch_in_local and 
+                        break_start_local <= punch_out_local):
                         if j < len(break_ends):
                             break_end = break_ends[j]
-                            if break_end.timestamp <= punch_out.timestamp:
-                                break_duration = break_end.timestamp - break_start.timestamp
+                            break_end_local = to_local_chicago(break_end.timestamp)
+                            if break_end_local <= punch_out_local:
+                                break_duration = break_end_local - break_start_local
                                 cycle_break_minutes += Decimal(str(break_duration.total_seconds() / 60))
-                
+
                 total_break_minutes += cycle_break_minutes
                 total_working_hours += max(Decimal('0'), cycle_hours - (cycle_break_minutes / 60))
         
         # Handle ongoing work (punched in but not out)
         if len(punch_ins) > len(punch_outs):
             last_punch_in = punch_ins.last()
-            current_time = timezone.now()
-            
+            last_punch_in_local = to_local_chicago(last_punch_in.timestamp)
+            current_time = to_local_chicago(timezone.now())
             if current_time.date() == work_session.date:
-                ongoing_duration = current_time - last_punch_in.timestamp
+                ongoing_duration = current_time - last_punch_in_local
                 ongoing_hours = Decimal(str(ongoing_duration.total_seconds() / 3600))
-                
                 # Check for ongoing break
                 ongoing_break_minutes = Decimal('0')
                 if (break_starts.exists() and 
                     len(break_starts) > len(break_ends) and
-                    break_starts.last().timestamp >= last_punch_in.timestamp):
-                    
-                    break_duration = current_time - break_starts.last().timestamp
+                    to_local_chicago(break_starts.last().timestamp) >= last_punch_in_local):
+                    break_duration = current_time - to_local_chicago(break_starts.last().timestamp)
                     ongoing_break_minutes = Decimal(str(break_duration.total_seconds() / 60))
-                
                 total_break_minutes += ongoing_break_minutes
                 total_working_hours += max(Decimal('0'), ongoing_hours - (ongoing_break_minutes / 60))
         
@@ -225,14 +241,12 @@ class TimeCalculationService:
             if work_session.punch_out:
                 total_duration = work_session.punch_out - work_session.punch_in
             elif len(punch_ins) > len(punch_outs):
-                total_duration = timezone.now() - work_session.punch_in
+                total_duration = to_local_chicago(timezone.now()) - work_session.punch_in
             else:
                 total_duration = timedelta(0)
-            
             work_session.total_hours = Decimal(str(total_duration.total_seconds() / 3600))
         else:
             work_session.total_hours = Decimal('0')
-        
         work_session.working_hours = total_working_hours
         work_session.break_duration = total_break_minutes
 
@@ -275,12 +289,13 @@ class TimeCalculationService:
             return False
         
         entry_time = timestamp.time()
-        start_time = business_hours.start_time
+        # Convert business_hours.start_time from UTC to Chicago
+        utc_dt = datetime.combine(timestamp.date(), business_hours.start_time).replace(tzinfo=pytz.utc)
+        start_time_chicago = utc_dt.astimezone(CENTRAL_TZ).time()
         late_threshold = (
-            datetime.combine(date.today(), start_time) + 
+            datetime.combine(timestamp.date(), start_time_chicago) + 
             timedelta(minutes=business_hours.late_threshold)
         ).time()
-        
         return entry_time > late_threshold
 
     def _is_early_entry(self, timestamp, business_hours, entry_type):
@@ -289,5 +304,8 @@ class TimeCalculationService:
             return False
         
         entry_time = timestamp.time()
-        scheduled_end_dt = datetime.combine(timestamp.date(), business_hours.end_time).time()
+        # Convert business_hours.end_time from UTC to Chicago
+        utc_dt = datetime.combine(timestamp.date(), business_hours.end_time).replace(tzinfo=pytz.utc)
+        end_time_chicago = utc_dt.astimezone(CENTRAL_TZ).time()
+        scheduled_end_dt = datetime.combine(timestamp.date(), end_time_chicago).time()
         return entry_time < scheduled_end_dt

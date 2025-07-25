@@ -1,3 +1,4 @@
+import pytz
 from rest_framework import viewsets, status
 from rest_framework.views import APIView
 from rest_framework.decorators import action
@@ -82,10 +83,16 @@ class WorkSessionViewSet(viewsets.ModelViewSet):
         start_date = self.request.query_params.get('start_date', None)
         end_date = self.request.query_params.get('end_date', None)
         
+        CHICAGO_TZ = pytz.timezone('America/Chicago')
         if start_date:
-            queryset = queryset.filter(date__gte=start_date)
+            # Convert to Chicago timezone
+            start_local = CHICAGO_TZ.localize(datetime.combine(datetime.strptime(start_date, "%Y-%m-%d"), time.min))
+            start_utc = start_local.astimezone(pytz.UTC)
+            queryset = queryset.filter(date__gte=start_utc)
         if end_date:
-            queryset = queryset.filter(date__lte=end_date)
+            end_local = CHICAGO_TZ.localize(datetime.combine(datetime.strptime(end_date, "%Y-%m-%d"), time.max))
+            end_utc = end_local.astimezone(pytz.UTC)
+            queryset = queryset.filter(date__lte=end_utc)
         
         return queryset.order_by('-date')
 
